@@ -1,0 +1,24 @@
+{
+  "name": "code-visualizer",
+  "displayName": "Code Visualizer",
+  "description": "Live Python code visualization for beginners",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onCommand:code-visualizer.open"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "code-visualizer.open", "title": "Code Visualizer: Open" }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^18.0.0",
+    "vscode": "^1.1.37"
+  }
+}
