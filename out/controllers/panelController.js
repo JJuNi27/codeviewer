@@ -25,12 +25,10 @@ class PanelController {
     updateWithCode(code) {
         if (!this.panel)
             return;
-        // ✅ 먼저 분석 결과를 만들고
         const a = (0, analyzeLite_1.analyzeLite)(code);
-        // ✅ 그 다음에 각각의 시각화 조각을 만든다
         const tableHtml = this.renderLoopTable(a);
         const flowHtml = this.renderFlowchart(a);
-        const gridHtml = this.renderGrid(a);
+        const gridHtml = this.renderGrid(a, code);
         const has2d = a.has2DArrayPattern ? "감지됨 ✅" : "아직 없음";
         const content = `
 <div style="font-family: ui-sans-serif, system-ui; display: grid; gap: 12px;">
@@ -106,7 +104,6 @@ class PanelController {
         if (!a.loops.length) {
             return `<div style="color:#777; font-size:13px;">흐름도를 만들 for문이 없어요.</div>`;
         }
-        // MVP: 1~2단계까지만 그림
         const loops = a.loops.slice().sort((x, y) => x.level - y.level).slice(0, 2);
         const w = 420;
         const boxW = 360;
@@ -160,11 +157,16 @@ class PanelController {
 </div>`;
     }
     /**
-     * 격자(Grid) MVP
-     * - A = [[0]*M for _ in range(N)] 패턴이 있으면 N×M 격자(미리보기) 출력
-     * - N/M이 숫자면 그 크기 근처로, 변수면 최대 preview로 표시
+     * ✅ Grid MVP + A[i][j] 자동 하이라이트(가능하면 애니메이션)
+     * - A = [[0]*M for _ in range(N)] 감지 → 격자 생성
+     * - A[i][j] 감지 + i/j가 range(숫자)면 → 자동으로 칸이 순회 하이라이트(버튼 없음)
      */
-    renderGrid(a) {
+    /**
+   * ✅ Grid MVP + 값 누적 증가
+   * - A = [[0]*M for _ in range(N)] 감지 → 격자 생성
+   * - A[i][j] 감지 + i/j가 range(숫자)면 → 자동 순회하면서 값 누적 증가
+   */
+    renderGrid(a, code) {
         if (!a.grids.length) {
             return `<div style="color:#777; font-size:13px;">2차원 배열이 감지되지 않았어요. (예: A = [[0]*M for _ in range(N)])</div>`;
         }
@@ -174,22 +176,113 @@ class PanelController {
         const colsNum = /^\d+$/.test(g.cols) ? parseInt(g.cols, 10) : maxPreview;
         const rows = Math.min(maxPreview, rowsNum);
         const cols = Math.min(maxPreview, colsNum);
+        // access 중에서 이 격자 이름(A)과 같은 마지막 접근만 사용
+        const access = a.cellAccesses.filter(x => x.arrayName === g.name).slice(-1)[0];
+        // 애니메이션 가능 조건:
+        // - A[i][j] 형태가 존재
+        // - i, j가 각각 range(숫자)로 파악 가능
+        let animRows;
+        let animCols;
+        if (access) {
+            const r = a.loopRanges[access.rowIndex];
+            const c = a.loopRanges[access.colIndex];
+            if (typeof r === "number" && typeof c === "number") {
+                animRows = Math.min(maxPreview, r);
+                animCols = Math.min(maxPreview, c);
+            }
+        }
+        // 셀 생성 (id 부여)
         let cells = "";
         for (let i = 0; i < rows; i++) {
             for (let j = 0; j < cols; j++) {
-                cells += `<div style="
-          width:34px;
-          height:34px;
-          border:1px solid #bbb;
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          font-size:12px;
-          background:#f9f9f9;
-          border-radius:6px;
-        ">0</div>`;
+                cells += `<div id="cv-cell-${i}-${j}" style="
+        width:34px;
+        height:34px;
+        border:1px solid #bbb;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        font-size:12px;
+        background:#f9f9f9;
+        border-radius:6px;
+        transition: transform 120ms ease, outline 120ms ease, background 120ms ease;
+      ">0</div>`;
             }
         }
+        const accessInfo = access
+            ? `<div style="margin-top:6px; font-size:12px; color:#555;">
+         🔎 접근 감지: <b>${this.escapeHtml(access.raw)}</b>
+       </div>`
+            : `<div style="margin-top:6px; font-size:12px; color:#777;">
+         (아직 A[i][j] 형태의 접근이 없어요)
+       </div>`;
+        // ✅ 값 누적 + 하이라이트 1칸만 유지
+        const script = (animRows && animCols)
+            ? `
+<script>
+(() => {
+  const R = ${animRows};
+  const C = ${animCols};
+  let idx = 0;
+
+  function clearHighlight() {
+    for (let r=0; r<R; r++) for (let c=0; c<C; c++) {
+      const el = document.getElementById(\`cv-cell-\${r}-\${c}\`);
+      if (el) el.classList.remove("cv-highlight");
+    }
+  }
+
+  function tick() {
+    clearHighlight();
+
+    const r = Math.floor(idx / C);
+    const c = idx % C;
+
+    const el = document.getElementById(\`cv-cell-\${r}-\${c}\`);
+    if (el) {
+      el.classList.add("cv-highlight");
+
+      // ✅ 핵심: 값 누적 증가
+      const v = parseInt(el.textContent || "0", 10);
+      const OP = "${access?.op ?? ""}";
+
+      if (OP === "+=") {
+        el.textContent = String(v + 1);
+        el.style.background = "#e9ffe9";
+      }
+      else if ("${access?.op}" === "-=") {
+        el.textContent = String(v - 1);
+        el.style.background = "#fff1e6";
+      }
+      else if ("${access?.op}" === "=") {
+        el.textContent = "0";
+        el.style.background = "#f0f0f0";
+      }
+
+    }
+
+    idx = (idx + 1) % (R * C);
+  }
+
+  if (window.__cvTimer) clearInterval(window.__cvTimer);
+  tick();
+  window.__cvTimer = setInterval(tick, 350);
+})();
+</script>
+
+<style>
+  .cv-highlight {
+    outline: 3px solid #7aa2ff;
+    background: #e9f0ff !important;
+    transform: scale(1.05);
+  }
+</style>
+`
+            : (access
+                ? `<div style="margin-top:6px; font-size:12px; color:#777;">
+             ※ 자동 순회/누적은 <code>for i in range(숫자)</code> / <code>for j in range(숫자)</code> 처럼 숫자가 파악될 때만 켜져요.
+           </div>`
+                : "");
         return `
 <div style="margin-bottom:6px; font-size:13px;">
   <b>${this.escapeHtml(g.name)}</b> : ${this.escapeHtml(g.rows)} × ${this.escapeHtml(g.cols)} 배열
@@ -201,7 +294,11 @@ class PanelController {
 
 <div style="margin-top:6px; font-size:12px; color:#777;">
   ※ 미리보기는 최대 ${maxPreview}×${maxPreview}까지만 표시
-</div>`;
+</div>
+
+${accessInfo}
+${script}
+`;
     }
     wrapHtml(content) {
         return `<!doctype html>
