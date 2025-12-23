@@ -1,0 +1,48 @@
+프로젝트명: Code Visualizer (Python)
+작성일: 2025-12-24
+브랜치: JJUNI
+
+프로젝트 목적:
+- VS Code 확장으로 파이썬 코드를 실제 실행이 아닌 "구조와 흐름" 중심으로 시각화하여 초보자의 이해를 돕는 학습 도구.
+- 반복문(특히 중첩 for), 2차원 배열, 인덱스 접근 등 구조적 패턴을 표, 흐름도, 그리드로 시각화.
+
+지금까지 구현된 내용 (MVP 요약):
+- 확장 기본 구조: `package.json`의 명령어(`code-visualizer.open`), `src/extension.ts`에서 패널 생성 및 문서 감시 연결.
+- 문서 및 커서 감시: `src/controllers/documentWatcher.ts` (디바운스 포함)로 실시간 코드/커서 이벤트 수집.
+- 패널 컨트롤러: `src/controllers/panelController.ts`에서 Webview 패널 생성, 코드 분석 결과 렌더링(루프 표, 흐름도, 그리드).
+- 라이트 분석기: `src/services/analyzeLite.ts`
+  - for문(들) 추출 및 들여쓰기 기반 깊이 계산
+  - `range(n)` 리터럴 파싱으로 루프 범위 추정
+  - 2D 배열 패턴 감지(몇 가지 정규식 기반 패턴)
+  - `A[i][j]` 형태의 셀 접근 감지(연산자 및 라인 포함)
+- UI 렌더링(패널 내부 HTML 템플릿): 그리드(미리보기, 최대 6×6), 흐름도(간단 박스), 루프 표, 커서 강조 및 제한적 애니메이션.
+- 유틸: `src/services/debounce.ts`.
+
+비어 있거나 플레이스홀더 상태의 구성요소:
+- `python_engine/` 내부: `engine.py` 및 `analyzers/*` 파일들이 주석/플레이스홀더 상태(정밀 분석 미구현).
+- `src/services/pythonBridge.ts`, `src/shared/*`, `src/webview/*` 렌더러 대부분은 초기/빈 상태 (구조만 존재).
+
+설계 철학(요약):
+- 실제 코드 실행 없이 문법/구조 분석으로 "왜 이렇게 동작하는지"를 시각적으로 설명.
+- 응답성(실시간 타이핑) 우선으로 정규식 기반 빠른 라이트 분석 사용.
+- 향후 Python AST 기반 정밀 분석으로 정확도 향상 계획.
+
+다음 권장 작업(우선순위):
+1. `python_engine`의 정밀 분석(간단한 AST 파이프라인) 구현하여 `analyzeLite` 보완 또는 대체.
+2. `src/services/pythonBridge.ts` 완성: Node ↔ Python 연동(선택적) 설계.
+3. `src/webview/render/*` 파일을 채워 Webview 쪽 렌더링 로직 분리 및 테스트.
+4. if/else 분기(다이아몬드) 추가 및 흐름도 정교화.
+5. 테스트 케이스(샘플 코드 스니펫)와 함께 자동화된 시나리오 검증 구축.
+
+참고 주요 파일들:
+- package.json
+- README.md
+- src/extension.ts
+- src/controllers/panelController.ts
+- src/controllers/documentWatcher.ts
+- src/services/analyzeLite.ts
+- python_engine/ (분석 엔진 플레이스홀더)
+
+현재 상태 요약: MVP 아이디어 검증 및 핵심 시각화(루프/그리드/흐름) 구현 완료, 정밀 분석과 Webview 렌더러 보강이 필요.
+
+끝.

@@ -36,6 +36,98 @@ VS Code Extension입니다.
 
 ---
 
+# Code Visualizer – 폴더 구조 & 역할 정리
+
+## 📁 프로젝트 루트
+
+# Code Visualizer – 폴더 구조 & 역할 정리
+
+## 📁 프로젝트 루트
+
+code-visualizer/
+├─ package.json
+│  └─ VS Code 확장 설정
+│     - 명령어 등록 (code-visualizer.open)
+│     - activationEvents
+│     - build / compile 스크립트
+│
+├─ tsconfig.json
+│  └─ TypeScript 컴파일 설정
+│
+├─ README.md
+│  └─ 프로젝트 설명 / 개발 기록 / 로드맵
+│
+├─ out/
+│  └─ TypeScript 컴파일 결과(js)
+│     ※ 자동 생성 폴더 (직접 수정 ❌)
+│
+└─ src/
+   └─ 실제 개발 소스 코드
+
+src/
+├─ extension.ts
+│  └─ 확장 프로그램 진입점(entry point)
+│     - 명령어 등록
+│     - PanelController 생성
+│     - DocumentWatcher 연결
+│     - 전체 흐름을 묶는 허브 역할
+│
+├─ controllers/
+│  ├─ panelController.ts
+│  │  └─ WebView 패널 전체 관리
+│  │     - 패널 생성 / 닫힘 관리
+│  │     - analyzeLite 결과를 HTML로 변환
+│  │     - for 루프 표 렌더링
+│  │     - 반복 흐름도 렌더링
+│  │     - 2차원 배열 Grid 시각화
+│  │     - 커서 기반 셀 하이라이트 (.cv-cursor)
+│  │     - 자동 순회 애니메이션 (.cv-highlight)
+│  │
+│  └─ documentWatcher.ts
+│     └─ VS Code 에디터 이벤트 감지
+│        - 코드 변경 감지
+│        - 커서 이동 감지
+│        - debounce 처리
+│        - PanelController로 코드/커서 전달
+│
+├─ services/
+│  ├─ analyzeLite.ts
+│  │  └─ 정규식 기반 라이트 분석기 (MVP 핵심)
+│  │     - for / 중첩 for 분석
+│  │     - 루프 변수(i, j) 추출
+│  │     - range(숫자) 반복 크기 추론
+│  │     - 2차원 배열 생성 패턴 감지
+│  │     - 배열 접근 A[row][col] + 라인 번호 추적
+│  │
+│  └─ debounce.ts
+│     └─ 입력 이벤트 과도 호출 방지용 유틸
+│        (실시간 타이핑 성능 안정화)
+│
+└─ types/
+   └─ (예정)
+      - AST 분석 결과 타입 정의용
+
+[ VS Code Editor ]
+        │
+        ▼
+DocumentWatcher
+  - 코드 변경
+  - 커서 이동
+        │
+        ▼
+PanelController
+  - analyzeLite(code)
+  - 구조 분석 결과 수신
+        │
+        ▼
+WebView 렌더링
+  - 루프 표
+  - 흐름도
+  - 2차원 배열 Grid
+  - 커서 하이라이트
+
+---
+
 ## 🛠 현재 구현된 기능 (MVP)
 
 📅 **개발 기준일**: 2025-12-23  
