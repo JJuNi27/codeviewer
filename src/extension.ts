@@ -13,10 +13,17 @@ export function activate(context: vscode.ExtensionContext) {
     panelController.createOrShow();
 
     // 패널이 열려있는 동안에만 업데이트
-    watcher.start((code) => {
-      if (!panelController.isOpen()) return;
-      panelController.updateWithCode(code);
-    });
+    watcher.start(
+      (code) => {
+        if (!panelController.isOpen()) return;
+        panelController.updateWithCode(code);
+      },
+      (line) => {
+        if (!panelController.isOpen()) return;
+        panelController.setCursorLine(line);
+      }
+    );
+
   });
 
   context.subscriptions.push(cmd);

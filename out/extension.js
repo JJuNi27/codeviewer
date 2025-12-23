@@ -17,6 +17,10 @@ function activate(context) {
             if (!panelController.isOpen())
                 return;
             panelController.updateWithCode(code);
+        }, (line) => {
+            if (!panelController.isOpen())
+                return;
+            panelController.setCursorLine(line);
         });
     });
     context.subscriptions.push(cmd);
