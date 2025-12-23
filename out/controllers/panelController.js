@@ -13,12 +13,11 @@ class PanelController {
         this.panel.onDidDispose(() => {
             this.panel = undefined;
         });
-        // 처음엔 안내 화면
         this.panel.webview.html = this.wrapHtml(`
-  <div style="font-family: ui-sans-serif, system-ui;">
-    패널 열림 ✅ 이제 코드를 타이핑하면 여기에 실시간 반영될 거야.
-  </div>
-`);
+      <div style="font-family: ui-sans-serif, system-ui;">
+        패널 열림 ✅ 이제 코드를 타이핑하면 여기에 실시간 반영될 거야.
+      </div>
+    `);
     }
     isOpen() {
         return !!this.panel;
@@ -26,9 +25,12 @@ class PanelController {
     updateWithCode(code) {
         if (!this.panel)
             return;
+        // ✅ 먼저 분석 결과를 만들고
         const a = (0, analyzeLite_1.analyzeLite)(code);
+        // ✅ 그 다음에 각각의 시각화 조각을 만든다
         const tableHtml = this.renderLoopTable(a);
         const flowHtml = this.renderFlowchart(a);
+        const gridHtml = this.renderGrid(a);
         const has2d = a.has2DArrayPattern ? "감지됨 ✅" : "아직 없음";
         const content = `
 <div style="font-family: ui-sans-serif, system-ui; display: grid; gap: 12px;">
@@ -53,11 +55,16 @@ class PanelController {
   </div>
 
   <div style="border:1px solid #ccc; border-radius:12px; padding:12px;">
+    <div style="font-weight:700; margin-bottom:8px;">2차원 배열 격자</div>
+    ${gridHtml}
+  </div>
+
+  <div style="border:1px solid #ccc; border-radius:12px; padding:12px;">
     <div style="font-weight:700; margin-bottom:8px;">현재 코드</div>
     <pre style="white-space: pre-wrap; margin:0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">${this.escapeHtml(code)}</pre>
   </div>
 </div>
-  `;
+    `;
         this.panel.webview.html = this.wrapHtml(content);
     }
     renderLoopTable(a) {
@@ -65,6 +72,7 @@ class PanelController {
             return `<div style="color:#777; font-size:13px;">for문이 아직 없어요.</div>`;
         }
         const rows = a.loops
+            .slice()
             .sort((x, y) => x.level - y.level)
             .map((loop) => {
             const role = loop.level === 1 ? "바깥(행 가능성↑)" :
@@ -98,9 +106,8 @@ class PanelController {
         if (!a.loops.length) {
             return `<div style="color:#777; font-size:13px;">흐름도를 만들 for문이 없어요.</div>`;
         }
-        // 루프 1~2단계까지만 MVP로 그림 (나중에 확장)
-        const loops = a.loops.sort((x, y) => x.level - y.level).slice(0, 2);
-        // SVG 레이아웃(아주 단순)
+        // MVP: 1~2단계까지만 그림
+        const loops = a.loops.slice().sort((x, y) => x.level - y.level).slice(0, 2);
         const w = 420;
         const boxW = 360;
         const boxH = 48;
@@ -114,12 +121,15 @@ class PanelController {
         });
         const bodyY = startY + loops.length * (boxH + gapY);
         const body = { x: startX, y: bodyY, title: "body (반복되는 코드 블록)" };
-        const svgBoxes = [...boxes, body].map((b) => `
+        const svgBoxes = [...boxes, body]
+            .map((b) => `
 <rect x="${b.x}" y="${b.y}" width="${boxW}" height="${boxH}" rx="12" ry="12" fill="none" stroke="#bbb"/>
 <text x="${b.x + 12}" y="${b.y + 30}" font-size="13" fill="#ddd" font-family="ui-monospace, monospace">${this.escapeHtml(b.title)}</text>
-`).join("");
-        // 화살표 (위에서 아래로)
-        const arrows = [...boxes, body].slice(0, -1).map((b, i) => {
+`)
+            .join("");
+        const arrows = [...boxes, body]
+            .slice(0, -1)
+            .map((b, i) => {
             const fromX = b.x + boxW / 2;
             const fromY = b.y + boxH;
             const toX = fromX;
@@ -127,8 +137,8 @@ class PanelController {
             return `
 <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="#888"/>
 <polygon points="${toX - 5},${toY - 6} ${toX + 5},${toY - 6} ${toX},${toY}" fill="#888"/>`;
-        }).join("");
-        // body -> 첫 for로 되돌아가는 반복 화살표(오른쪽에 크게)
+        })
+            .join("");
         const loopBack = `
 <path d="M ${startX + boxW} ${body.y + boxH / 2}
          C ${startX + boxW + 40} ${body.y + boxH / 2},
@@ -147,6 +157,50 @@ class PanelController {
   <div style="font-size:12px; color:#888; margin-top:6px;">
     ※ MVP: for 흐름만 도형으로 표시 (다음에 if 다이아몬드/분기 추가)
   </div>
+</div>`;
+    }
+    /**
+     * 격자(Grid) MVP
+     * - A = [[0]*M for _ in range(N)] 패턴이 있으면 N×M 격자(미리보기) 출력
+     * - N/M이 숫자면 그 크기 근처로, 변수면 최대 preview로 표시
+     */
+    renderGrid(a) {
+        if (!a.grids.length) {
+            return `<div style="color:#777; font-size:13px;">2차원 배열이 감지되지 않았어요. (예: A = [[0]*M for _ in range(N)])</div>`;
+        }
+        const g = a.grids[0];
+        const maxPreview = 6;
+        const rowsNum = /^\d+$/.test(g.rows) ? parseInt(g.rows, 10) : maxPreview;
+        const colsNum = /^\d+$/.test(g.cols) ? parseInt(g.cols, 10) : maxPreview;
+        const rows = Math.min(maxPreview, rowsNum);
+        const cols = Math.min(maxPreview, colsNum);
+        let cells = "";
+        for (let i = 0; i < rows; i++) {
+            for (let j = 0; j < cols; j++) {
+                cells += `<div style="
+          width:34px;
+          height:34px;
+          border:1px solid #bbb;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          font-size:12px;
+          background:#f9f9f9;
+          border-radius:6px;
+        ">0</div>`;
+            }
+        }
+        return `
+<div style="margin-bottom:6px; font-size:13px;">
+  <b>${this.escapeHtml(g.name)}</b> : ${this.escapeHtml(g.rows)} × ${this.escapeHtml(g.cols)} 배열
+</div>
+
+<div style="display:grid; grid-template-columns: repeat(${cols}, 34px); gap:4px;">
+  ${cells}
+</div>
+
+<div style="margin-top:6px; font-size:12px; color:#777;">
+  ※ 미리보기는 최대 ${maxPreview}×${maxPreview}까지만 표시
 </div>`;
     }
     wrapHtml(content) {
